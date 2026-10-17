@@ -1,0 +1,79 @@
+
+name: Build APK Matematika HDP
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'MATEMATIKA HDP .html'
+      - 'cover-matematika.png'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ambil file repository
+        uses: actions/checkout@v4
+
+      - name: Siapkan Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Siapkan Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Periksa file sumber
+        run: |
+          test -f "MATEMATIKA HDP .html"
+          test -f "cover-matematika.png"
+
+      - name: Siapkan proyek web
+        run: |
+          mkdir -p www assets
+          cp "MATEMATIKA HDP .html" www/index.html
+          cp cover-matematika.png assets/icon.png
+          cp cover-matematika.png assets/splash.png
+          npm init -y
+          npm install @capacitor/core @capacitor/android
+          npm install --save-dev @capacitor/cli @capacitor/assets
+
+      - name: Konfigurasi aplikasi
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.hdp.matematika",
+            "appName": "Matematika HDP",
+            "webDir": "www"
+          }
+          EOF
+
+      - name: Buat proyek Android
+        run: |
+          npx cap add android
+
+      - name: Buat ikon Android
+        run: |
+          npx capacitor-assets generate --android
+
+      - name: Sinkronisasi aplikasi
+        run: |
+          npx cap sync android
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Simpan APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Matematika-HDP-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
