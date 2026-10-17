@@ -54,22 +54,40 @@ jobs:
           EOF
 
       - name: Buat proyek Android
-        run: |
-          npx cap add android
+        run: npx cap add android
 
       - name: Buat ikon Android
-        run: |
-          npx capacitor-assets generate --android
+        run: npx capacitor-assets generate --android
 
       - name: Sinkronisasi aplikasi
+        run: npx cap sync android
+
+      - name: Atasi konflik Kotlin
         run: |
-          npx cap sync android
+          cat > android/force-kotlin.gradle <<'EOF'
+          allprojects {
+            configurations.configureEach {
+              resolutionStrategy.eachDependency {
+                details ->
+                if (details.requested.group == 'org.jetbrains.kotlin' &&
+                    details.requested.name in [
+                      'kotlin-stdlib',
+                      'kotlin-stdlib-jdk7',
+                      'kotlin-stdlib-jdk8'
+                    ]) {
+                  details.useVersion '1.8.22'
+                  details.because 'Align Kotlin standard library versions'
+                }
+              }
+            }
+          }
+          EOF
 
       - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew -I force-kotlin.gradle assembleDebug
 
       - name: Simpan APK
         uses: actions/upload-artifact@v4
