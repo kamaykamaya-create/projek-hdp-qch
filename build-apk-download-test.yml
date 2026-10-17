@@ -1,0 +1,96 @@
+
+name: Build APK Matematika HDP - Test Download
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'MATEMATIKA_HDP_DOWNLOAD_TEST.html'
+      - 'cover-matematika.png'
+      - '.github/workflows/build-apk-download-test.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ambil file repository
+        uses: actions/checkout@v4
+
+      - name: Siapkan Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Siapkan Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Periksa file sumber
+        run: |
+          test -f "MATEMATIKA_HDP_DOWNLOAD_TEST.html"
+          test -f "cover-matematika.png"
+
+      - name: Siapkan proyek web
+        run: |
+          mkdir -p www assets
+          cp "MATEMATIKA_HDP_DOWNLOAD_TEST.html" www/index.html
+          cp cover-matematika.png assets/icon.png
+          cp cover-matematika.png assets/splash.png
+          npm init -y
+          npm install @capacitor/core @capacitor/android
+          npm install --save-dev @capacitor/cli @capacitor/assets
+
+      - name: Konfigurasi aplikasi
+        run: |
+          cat > capacitor.config.json <<'EOF_CONFIG'
+          {
+            "appId": "com.hdp.matematika",
+            "appName": "Matematika HDP Test Download",
+            "webDir": "www"
+          }
+          EOF_CONFIG
+
+      - name: Buat proyek Android
+        run: npx cap add android
+
+      - name: Buat ikon Android
+        run: npx capacitor-assets generate --android
+
+      - name: Sinkronisasi aplikasi
+        run: npx cap sync android
+
+      - name: Atasi konflik Kotlin
+        run: |
+          cat > android/force-kotlin.gradle <<'EOF_GRADLE'
+          allprojects {
+            configurations.configureEach {
+              resolutionStrategy.eachDependency { details ->
+                if (details.requested.group == 'org.jetbrains.kotlin' &&
+                    details.requested.name in [
+                      'kotlin-stdlib',
+                      'kotlin-stdlib-jdk7',
+                      'kotlin-stdlib-jdk8'
+                    ]) {
+                  details.useVersion '1.8.22'
+                  details.because 'Align Kotlin standard library versions'
+                }
+              }
+            }
+          }
+          EOF_GRADLE
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew -I force-kotlin.gradle assembleDebug
+
+      - name: Simpan APK uji
+        uses: actions/upload-artifact@v4
+        with:
+          name: Matematika-HDP-APK-Test-Download
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
